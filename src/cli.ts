@@ -47,13 +47,8 @@ if (program.logLevel) {
   }
 }
 
-let tsserverPath = path.join(__dirname, '..', 'node_modules', 'typescript', 'bin', 'tsserver');
-if (!fs.existsSync(tsserverPath)) {
-  tsserverPath = path.join(__dirname, '..', '..', 'typescript', 'bin', 'tsserver');
-}
-
 createLspConnection({
-  tsserverPath,  // program.tsserverPath as string,
+  tsserverPath: require.resolve('typescript/bin/tsserver'), // program.tsserverPath as string,
   tsserverLogFile: program.tsserverLogFile as string,
   tsserverLogVerbosity: program.tsserverLogVerbosity as string,
   showMessageLevel: logLevel as lsp.MessageType,

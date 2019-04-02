@@ -6,8 +6,11 @@ import { TypeScriptInitializeParams } from '@elastic/typescript-language-server/
 import { CommandTypes } from '@elastic/typescript-language-server/lib/tsp-command-types';
 
 import * as lsp from 'vscode-languageserver';
+import {DependencyManager} from './dependency-manager';
 
 export class ExtendedLspServer extends LspServer {
+  private gitHostWhitelist: string[] | undefined;
+
   documentSymbol(params: lsp.TextDocumentPositionParams) {
     this.ensureDocumentOpen(params.textDocument.uri);
     return super.documentSymbol(params);
@@ -27,6 +30,12 @@ export class ExtendedLspServer extends LspServer {
 
   initialize(params: TypeScriptInitializeParams) {
     // TODO: install deps
+    const dependencyManager = new DependencyManager(params.rootPath || uriToPath(params.rootUri!));
+    if (params.initializationOptions.installNodeDependency) {
+      dependencyManager.installDependency();
+    }
+    this.gitHostWhitelist = params.initializationOptions.gitHostWhitelist;
+
     return super.initialize(params);
   }
 
