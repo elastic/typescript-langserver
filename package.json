@@ -1,0 +1,24 @@
+{
+  "name": "@elastic/typescript-langserver",
+  "version": "0.1.0",
+  "private": false,
+  "scripts": {
+    "start": "node ./bin/www",
+    "watch": "tsc -b --watch --verbose",
+    "build": "yarn && yarn compile",
+    "compile": "tsc -b",
+    "lint": "yarn typecheck && tslint -c ./tslint.yaml -p ./tsconfig.json", 
+    "typecheck": "tsc -p ./tsconfig.json --noEmit", 
+    "pub": "yarn build && yarn publish:latest"
+  },
+  "dependencies": {
+    "@elastic/lsp-extension": "^0.1.1",
+    "@elastic/typescript-language-server": "^0.3.8-alpha1"
+  },
+  "devDependencies": {
+    "@types/node": "^8.0.31",
+    "tslint": "^5.11.0",
+    "typescript": "^3.3.4000",
+    "typescript-tslint-plugin": "^0.3.1"
+  }
+}

@@ -1,0 +1,11 @@
+extends:
+  - tslint:recommended
+
+rules:
+  no-namespace: false
+  object-literal-sort-keys: false
+  interface-name: false
+  no-irregular-whitespace: true
+  no-unused-expression: true
+  quotemark: [true, 'single', 'jsx-double']
+  member-access: [true, 'no-public']
