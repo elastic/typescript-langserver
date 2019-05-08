@@ -1,6 +1,6 @@
 import { ExtendedLspServer } from './extended-lsp-server';
 
-import { DetailSymbolInformation, Full, FullParams } from '@elastic/lsp-extension';
+import { Full, FullParams, SymbolLocator } from '@elastic/lsp-extension';
 import { LspClientLogger } from '@elastic/typescript-language-server/lib/logger';
 import { LspClientImpl } from '@elastic/typescript-language-server/lib/lsp-client';
 import * as LspConnection from '@elastic/typescript-language-server/lib/lsp-connection';
@@ -17,7 +17,7 @@ export namespace FullRequest {
 export namespace EDefinitionRequest {
   export const type = new RequestType<
     lsp.TextDocumentPositionParams,
-    DetailSymbolInformation,
+    SymbolLocator,
     void,
     lsp.TextDocumentRegistrationOptions
     >('textDocument/edefinition');

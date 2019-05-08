@@ -16,12 +16,18 @@
   ],
   "dependencies": {
     "@elastic/lsp-extension": "^0.1.1",
-    "@elastic/typescript-language-server": "^0.3.8-alpha2",
+    "@elastic/typescript-language-server": "^0.3.8-alpha3",
+    "semver": "^5.6.0",
+    "source-map": "^0.7.3",
     "typescript": "^3.3.4000",
-    "yarn": "^1.12.3"
+    "yarn": "^1.12.3",
+    "npm-registry-fetch": "^3.8.0",
+    "mz": "^2.7.0"
   },
   "devDependencies": {
-    "@types/node": "^8.0.31",
+    "@types/semver": "5.5.0",
+    "@types/node": "10.12.18",
+    "@types/mz": "0.0.32",
     "@types/fs-extra": "^5.0.4",
     "@types/p-debounce": "^1.0.0",
     "tslint": "^5.11.0",
