@@ -1,32 +1,32 @@
-import {DetailSymbolInformation, Full, FullParams, SymbolLocator} from '@elastic/lsp-extension';
-import {shouldIncludeEntry} from '@elastic/typescript-language-server/lib/document-symbol';
-import {LspServer} from '@elastic/typescript-language-server/lib/lsp-server';
+import { DetailSymbolInformation, Full, FullParams, SymbolLocator } from '@elastic/lsp-extension';
+import { shouldIncludeEntry } from '@elastic/typescript-language-server/lib/document-symbol';
+import { LspServer } from '@elastic/typescript-language-server/lib/lsp-server';
 import {
   asRange,
   asTagsDocumentation, pathToUri,
   toSymbolKind,
   uriToPath,
 } from '@elastic/typescript-language-server/lib/protocol-translation';
-import {TypeScriptInitializeParams} from '@elastic/typescript-language-server/lib/ts-protocol';
-import {CommandTypes} from '@elastic/typescript-language-server/lib/tsp-command-types';
-import {fs} from 'mz';
-import {readFile} from 'mz/fs';
-import { NullableMappedPosition, RawSourceMap, SourceMapConsumer } from 'source-map';
+import { TypeScriptInitializeParams} from '@elastic/typescript-language-server/lib/ts-protocol';
+import { CommandTypes } from '@elastic/typescript-language-server/lib/tsp-command-types';
+import { fs } from 'mz';
+import { readFile } from 'mz/fs';
+import { NullableMappedPosition, SourceMapConsumer } from 'source-map';
 
 import * as path from 'path';
 import * as tsp from 'typescript/lib/protocol';
 import {fileURLToPath, pathToFileURL, URL} from 'url';
 import * as lsp from 'vscode-languageserver';
+import { SymbolInformation, SymbolKind } from 'vscode-languageserver';
 import {
   cloneUrlFromPackageMeta,
-  fetchPackageMeta,
-  findClosestPackageJson,
+  findClosestPackageJson, PackageJson,
   resolveDependencyRootDir,
 } from './dependencies';
-import {DependencyManager} from './dependency-manager';
+import { DependencyManager } from './dependency-manager';
 
 const NODE_MODULES: string = path.sep + 'node_modules' + path.sep;
-const EMPTY_FULL: Full = { symbols: [], references: [] };
+const EMPTY_FULL: Full = {symbols: [], references: []};
 
 const TYPESCRIPT_DIR_URI = pathToFileURL(path.resolve(__dirname, '..', 'node_modules', 'typescript') + '/');
 const TYPESCRIPT_VERSION = JSON.parse(
@@ -46,16 +46,16 @@ export class ExtendedLspServer extends LspServer {
     const file = uriToPath(params.textDocument.uri);
     this.logger.log('hover', params, file);
     if (!file) {
-      return { contents: [] };
+      return {contents: []};
     }
 
     const result = await this.interuptDiagnostics(() => this.getQuickInfo(file, params.position));
     if (!result || !result.body) {
-      return { contents: [] };
+      return {contents: []};
     }
     const range = asRange(result.body);
     const contents: lsp.MarkedString[] = [
-      { language: 'typescript', value: this.replaceWorkspaceInString(result.body.displayString) },
+      {language: 'typescript', value: this.replaceWorkspaceInString(result.body.displayString)},
     ];
     // TODO: security filtering for documentation
     const tags = asTagsDocumentation(result.body.tags);
@@ -157,7 +157,10 @@ export class ExtendedLspServer extends LspServer {
     //   collectSymbolInformations(params.textDocument.uri, item, symbols);
     // }
     // this.didCloseTextDocument({ textDocument: { uri: params.textDocument.uri }});
-    return { symbols: symbols.map(this.toDetailSymbolInformation), references: [] };
+
+    const detailSymbols = await Promise.all(symbols.map(this.toDetailSymbolInformation));
+
+    return {symbols: detailSymbols, references: []};
   }
 
   didOpenTextDocument(params: lsp.DidOpenTextDocumentParams): void {
@@ -175,16 +178,35 @@ export class ExtendedLspServer extends LspServer {
     }
   }
 
-  private toDetailSymbolInformation(symbol: lsp.SymbolInformation): DetailSymbolInformation {
+  exit(): void {
+    process.exit();
+  }
+
+  // private cleanContainerName(name: string): string {
+  //   return name.split('"').join('').split('\\').join('.').split('/').join('.');
+  // }
+
+  private async toDetailSymbolInformation(symbol: lsp.SymbolInformation): Promise<DetailSymbolInformation> {
     // TODO
+    const url = new URL(symbol.location.uri);
+    const [, packageJson] = await findClosestPackageJson(url, pathToFileURL(this.rootPath())); // enough param?
+
+    const [repoUri] = getRepoUri(packageJson);
+    const packageLocator = {
+      name: packageJson.name,
+      repoUri,
+      version: '',
+    };
     return {
       symbolInformation: symbol,
-      qname: 'tmp',
+      qname:  getQnameBySymbolInformation(symbol),
+      package: packageLocator,
     };
   }
+
   private ensureDocumentOpen(uri: string) {
     // TODO check if languageId does matter
-    this.didOpenTextDocument({ textDocument: { uri, languageId: '', text: '', version: 0 }});
+    this.didOpenTextDocument({textDocument: {uri, languageId: '', text: '', version: 0}});
   }
 
   private replaceWorkspaceInString(str: string): string {
@@ -193,7 +215,7 @@ export class ExtendedLspServer extends LspServer {
     return res[res.length - 1];
   }
 
-  private async convertLocation(location: lsp.Location) {
+  private async convertLocation(location: lsp.Location): Promise<SymbolLocator> {
     const url = new URL(location.uri);
 
     // TODO, we may not need this block, find a repo to test it
@@ -203,7 +225,7 @@ export class ExtendedLspServer extends LspServer {
       // Can we do sourceMap?
       const typescriptUrl = `git://github.com/Microsoft/TypeScript/blob/${TYPESCRIPT_VERSION}/${relativeFilePath}`;
       return {
-        location: { uri: typescriptUrl, range: location.range },
+        location: {uri: typescriptUrl, range: location.range},
       };
     }
 
@@ -211,29 +233,18 @@ export class ExtendedLspServer extends LspServer {
       const moduleUrl = new URL(location.uri.substr(0, location.uri.indexOf(NODE_MODULES) + NODE_MODULES.length));
       const [, packageJson] = await findClosestPackageJson(url, moduleUrl); // enough param?
       // if (!packageJson.repository)
-      let cloneUrl = cloneUrlFromPackageMeta(packageJson);
-      let subdir = '';
-      // Handle GitHub tree URLs
-      const treeMatch = cloneUrl.match(
-        /^(?:https?:\/\/)?(?:www\.)?github.com\/[^\/]+\/[^\/]+\/tree\/[^\/]+\/(.+)$/,
-      );
-      if (treeMatch) {
-        subdir = treeMatch[1];
-        cloneUrl = cloneUrl.replace(/(\/tree\/[^\/]+)\/.+/, '$1');
-      }
-      if (typeof packageJson.repository === 'object' && packageJson.repository.directory) {
-        subdir = packageJson.repository.directory;
-      } else if (packageJson.name.startsWith('@types/')) {
-        // Special-case DefinitelyTyped
-        subdir = packageJson.name.substr(1);
-      }
+
+      const [repoUri, subdir] = getRepoUri(packageJson);
+
       // const npmConfig = configuration['typescript.npmrc'] || {}
-      let gitVersion = 'master';
+      const gitVersion = 'master';
+
+      // If there is only single package.json, maybe just use tag?
       try {
-        const packageMeta = await fetchPackageMeta(packageJson.name, packageJson.version, {}); // TODO fill npmConfig
-        if (packageMeta.gitHead) {
-          gitVersion = packageMeta.gitHead;
-        }
+        // const packageMeta = await fetchPackageMeta(packageJson.name, packageJson.version, {});
+        // if (packageMeta.gitHead) {
+        //   gitVersion = packageMeta.gitHead;
+        // }
       } catch (e) {
         // Keep using 'master'
       }
@@ -304,11 +315,6 @@ export class ExtendedLspServer extends LspServer {
         mappedRange = location.range;
       }
 
-      let repoUri = cloneUrl.replace('https://', 'git://');
-      if (repoUri.endsWith('.git')) {
-        repoUri = repoUri.substr(0, repoUri.length - 4);
-      }
-
       // TODO this should be simplified
       const depRootDir = resolveDependencyRootDir(fileURLToPath(url));
       const mappedPackageRelativeFilePath = path.posix.relative(depRootDir, fileURLToPath(mappedUri));
@@ -324,7 +330,7 @@ export class ExtendedLspServer extends LspServer {
         location: symbolLocation,
         package: {
           name: packageJson.name,
-          repoUri: cloneUrl, // TODO need modify?
+          repoUri,
           version: gitVersion,
         },
       };
@@ -334,6 +340,51 @@ export class ExtendedLspServer extends LspServer {
       };
     }
   }
+}
+
+function getRepoUri(packageJson: PackageJson): [string, string] {
+  let cloneUrl = cloneUrlFromPackageMeta(packageJson);
+  let subdir = '';
+  // Handle GitHub tree URLs
+  const treeMatch = cloneUrl.match(
+    /^(?:https?:\/\/)?(?:www\.)?github.com\/[^\/]+\/[^\/]+\/tree\/[^\/]+\/(.+)$/,
+  );
+  if (treeMatch) {
+    subdir = treeMatch[1];
+    cloneUrl = cloneUrl.replace(/(\/tree\/[^\/]+)\/.+/, '$1');
+  }
+  if (typeof packageJson.repository === 'object' && packageJson.repository.directory) {
+    subdir = packageJson.repository.directory;
+  } else if (packageJson.name.startsWith('@types/')) {
+    // Special-case DefinitelyTyped
+    subdir = packageJson.name.substr(1);
+  }
+  let repoUri = cloneUrl.replace('https://', 'git://');
+  if (repoUri.endsWith('.git')) {
+    repoUri = repoUri.substr(0, repoUri.length - 4);
+  }
+
+  return [repoUri, subdir];
+}
+
+function getQnameBySymbolInformation(info: SymbolInformation): string {
+  let prefix = '';
+  // if (packageLocator && packageLocator.name && packageLocator.name !== '') {
+  //     prefix += packageLocator.name + '.'
+  // } else {
+  //     prefix = 'unknown'
+  // }
+  // const fileName = this.getFileName(info.location.uri);
+  // const simpleName = this.getSimpleFileName(fileName)
+  // if (info.location.uri !== '') {
+  //     prefix += simpleName + '.'
+  // }
+  if (info.kind !== SymbolKind.Field) {
+    if (info.containerName && info.containerName !== '') {
+      prefix += info.containerName + '.';
+    }
+  }
+  return prefix + info.name;
 }
 
 function collectSymbolInformations(
@@ -346,8 +397,8 @@ function collectSymbolInformations(
     if (current.childItems) {
       for (const child of current.childItems) {
         // if (child.spans.some((span2) => !!Range.intersection(range, asRange(span2)))) {
-          const includedChild = collectSymbolInformations(uri, child, children, name);
-          shouldInclude = shouldInclude || includedChild;
+        const includedChild = collectSymbolInformations(uri, child, children, name);
+        shouldInclude = shouldInclude || includedChild;
         // }
       }
     }
