@@ -38,6 +38,8 @@ export class DependencyManager {
         '--no-progress', // don't show progress
         '--non-interactive',
         '--ignore-engines', // ignore "incompatible module" error
+        '--pure-lockfile',
+        '--link-duplicates',
       ],
       {
         env,

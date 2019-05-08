@@ -7,9 +7,6 @@ import { getTsserverExecutable } from '@elastic/typescript-language-server/lib/u
 import { Command } from 'commander';
 import * as lsp from 'vscode-languageserver';
 
-import * as fs from 'fs';
-import * as path from 'path';
-
 const program = new Command('typescript-language-server')
   // tslint:disable-next-line:no-var-requires
   .version(require('../package.json').version)
@@ -47,9 +44,25 @@ if (program.logLevel) {
   }
 }
 
-createLspConnection({
-  tsserverPath: require.resolve('typescript/bin/tsserver'), // program.tsserverPath as string,
-  tsserverLogFile: program.tsserverLogFile as string,
-  tsserverLogVerbosity: program.tsserverLogVerbosity as string,
-  showMessageLevel: logLevel as lsp.MessageType,
-}).listen();
+function delay(ms: number) {
+  return new Promise( (resolve) => setTimeout(resolve, ms) );
+}
+
+// while (true) {
+
+function listen() {
+  const otherOptions = new Map<string, string>();
+  otherOptions.set('--useSingleInferredProject', 'true');
+  createLspConnection({
+    tsserverPath: require.resolve('typescript/bin/tsserver'), // program.tsserverPath as string,
+    tsserverLogFile: program.tsserverLogFile as string,
+    tsserverLogVerbosity: program.tsserverLogVerbosity as string,
+    showMessageLevel: logLevel as lsp.MessageType,
+    otherOptions,
+  }).listen();
+
+  console.log('Reconnecting');
+  // setTimeout(listen, 1000);
+}
+
+listen();

@@ -6,6 +6,7 @@
     "target": "es6",
     "noImplicitAny": true,
     "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
     "sourceMap": true,
     "baseUrl": ".",
     "plugins": [
