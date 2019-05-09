@@ -59,6 +59,7 @@ export function createLspConnection(options: LspConnection.IServerOptions): lsp.
   connection.onSignatureHelp(server.signatureHelp.bind(server));
   connection.onWorkspaceSymbol(server.workspaceSymbol.bind(server));
   connection.onFoldingRanges(server.foldingRanges.bind(server));
+  connection.onExit(server.exit.bind(server));
 
   // proposed `textDocument/calls` request
   connection.onRequest(lspcalls.CallsRequest.type, server.calls.bind(server));
