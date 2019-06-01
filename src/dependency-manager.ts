@@ -22,16 +22,17 @@ export class DependencyManager {
     env.TERM = 'dumb';
 
     const cwd = this.rootPath;
-    const cmd = require.resolve('yarn/bin/yarn');
+    const yarnScript = require.resolve('yarn/bin/yarn.js');
 
-    if (existsSync(resolve(cwd, 'package-lock.json')) && !existsSync(resolve(cwd, 'yarn.lock'))) {
+    // if (existsSync(resolve(cwd, 'package-lock.json')) && !existsSync(resolve(cwd, 'yarn.lock'))) {
       //  TODO, use bundle npm?
       // cmd = 'npm';
-    }
+    // }
 
     spawnSync(
-      cmd,
+      process.execPath,
       [
+        yarnScript,
         'install',
         '--json',
         '--ignore-scripts', // no user script will be run
