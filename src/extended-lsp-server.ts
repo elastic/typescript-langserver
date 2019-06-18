@@ -34,8 +34,6 @@ const TYPESCRIPT_VERSION = JSON.parse(
 ).version;
 
 export class ExtendedLspServer extends LspServer {
-  private gitHostWhitelist: string[] | undefined;
-
   documentSymbol(params: lsp.TextDocumentPositionParams) {
     this.ensureDocumentOpen(params.textDocument.uri);
     return super.documentSymbol(params);
@@ -75,11 +73,13 @@ export class ExtendedLspServer extends LspServer {
   }
 
   async initialize(params: TypeScriptInitializeParams) {
-    const dependencyManager = new DependencyManager(params.rootPath || uriToPath(params.rootUri!));
+    const dependencyManager = new DependencyManager(params.rootPath || uriToPath(params.rootUri!),
+      this.logger,
+      params.initializationOptions.gitHostWhitelist);
+
     if (params.initializationOptions.installNodeDependency) {
-      dependencyManager.installDependency();
+      await dependencyManager.installDependency();
     }
-    this.gitHostWhitelist = params.initializationOptions.gitHostWhitelist;
 
     const result = await super.initialize(params);
 
