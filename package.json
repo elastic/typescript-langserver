@@ -1,6 +1,6 @@
 {
   "name": "@elastic/typescript-langserver",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "private": false,
   "scripts": {
     "start": "node ./lib/cli.js",
