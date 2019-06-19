@@ -85,6 +85,7 @@ export class DependencyManager {
     await this.deletePackageRecursively(resolve(this.rootPath, 'node_modules'));
   }
 
+  // TODO handle package softlink
   private async deletePackageRecursively(rootPath: string) {
     try {
       const names = await fs.readdir(rootPath);

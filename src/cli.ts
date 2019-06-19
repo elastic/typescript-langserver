@@ -53,6 +53,9 @@ function delay(ms: number) {
 function listen() {
   const otherOptions = new Map<string, string>();
   otherOptions.set('--useSingleInferredProject', 'true');
+  otherOptions.set('--suppressDiagnosticEvents', 'true');
+  otherOptions.set('--noGetErrOnBackgroundUpdate', 'true');
+
   createLspConnection({
     tsserverPath: require.resolve('typescript/bin/tsserver'), // program.tsserverPath as string,
     tsserverLogFile: program.tsserverLogFile as string,

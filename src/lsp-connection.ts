@@ -34,6 +34,7 @@ export function createLspConnection(options: LspConnection.IServerOptions): lsp.
     tsserverPath: options.tsserverPath,
     tsserverLogFile: options.tsserverLogFile,
     tsserverLogVerbosity: options.tsserverLogVerbosity,
+    otherOptions: options.otherOptions,
   });
 
   connection.onInitialize(server.initialize.bind(server));

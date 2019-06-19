@@ -167,43 +167,30 @@ export interface PackageJson {
 export async function findClosestPackageJson(
   resource: URL,
   rootUri = Object.assign(new URL(resource.href), { pathname: '' }),
-  {
-    span = new Span(),
-    tracer = new Tracer(),
-  }: {
-    span?: Span
-    tracer?: Tracer,
-  } = {},
 ): Promise<[URL, PackageJson]> {
-  return await tracePromise(
-    'Find closest package.json',
-    tracer,
-    span,
-    async (span): Promise<[URL, PackageJson]> => {
-      for (const parent of walkUp(resource)) {
-        if (!parent.href.startsWith(rootUri.href)) {
-          break;
-        }
-        const packageJsonUri = new URL('package.json', parent.href);
+  for (const parent of walkUp(resource)) {
+    if (!parent.href.startsWith(rootUri.href)) {
+      break;
+    }
+    const packageJsonUri = new URL('package.json', parent.href);
 
-        // TODO why original package don't have this check?
-        if (!fs.existsSync(fileURLToPath(packageJsonUri))) {
-          continue;
-        }
-        try {
-          const packageJson = await readPackageJson(packageJsonUri, { span, tracer });
-          return [packageJsonUri, packageJson];
-        } catch (err) {
-          // TODO remove this
-          if (err instanceof ResourceNotFoundError) {
-            continue;
-          }
-          throw err;
-        }
+    // TODO why original package don't have this check?
+    if (!fs.existsSync(fileURLToPath(packageJsonUri))) {
+      continue;
+    }
+    try {
+      const packageJson = await readPackageJson(packageJsonUri);
+      return [packageJsonUri, packageJson];
+    } catch (err) {
+      // TODO remove this
+      if (err instanceof ResourceNotFoundError) {
+        continue;
       }
-      throw new Error(`No package.json found for ${resource} under root ${rootUri}`);
-    },
-  );
+      throw err;
+    }
+  }
+
+  throw new Error(`No package.json found for ${resource} under root ${rootUri}`);
 }
 
 export const isDefinitelyTyped = (uri: URL): boolean => uri.pathname.includes('DefinitelyTyped/DefinitelyTyped');
@@ -228,10 +215,7 @@ export async function findPackageRootAndName(
     }
   }
   // Find containing package
-  const [packageJsonUrl, packageJson] = await findClosestPackageJson(uri, undefined, {
-    span,
-    tracer,
-  });
+  const [packageJsonUrl, packageJson] = await findClosestPackageJson(uri, undefined);
   if (!packageJson.name) {
     throw new Error(`package.json at ${packageJsonUrl} does not contain a name`);
   }
@@ -239,17 +223,22 @@ export async function findPackageRootAndName(
   return [packageRoot, packageJson.name];
 }
 
-export async function readPackageJson(
-  pkgJsonUri: URL,
-  options: { span: Span; tracer: Tracer },
-): Promise<PackageJson> {
-  const json = await readFile(fileURLToPath(pkgJsonUri), 'utf-8');
-  return JSON.parse(json);
+const packageCache = new Map<string, any>();
+
+export async function readPackageJson(pkgJsonUri: URL): Promise<PackageJson> {
+  const path = fileURLToPath(pkgJsonUri);
+  if (packageCache.has(path)) {
+    return packageCache.get(path);
+  } else {
+    const json = JSON.parse(await readFile(path, 'utf-8'));
+    packageCache.set(path, json);
+    return json;
+  }
 }
 
 export function cloneUrlFromPackageMeta(packageMeta: PackageJson): string {
   if (!packageMeta.repository) {
-    throw new Error('Package data does not contain repository field');
+    throw new Error(`Package ${packageMeta.name} data does not contain repository field`);
   }
   let repoUrl = typeof packageMeta.repository === 'string' ? packageMeta.repository : packageMeta.repository.url;
   // GitHub shorthand

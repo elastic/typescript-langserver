@@ -1,5 +1,5 @@
-import { DetailSymbolInformation, Full, FullParams, SymbolLocator } from '@elastic/lsp-extension';
-import { shouldIncludeEntry } from '@elastic/typescript-language-server/lib/document-symbol';
+import {DetailSymbolInformation, Full, FullParams, PackageLocator, SymbolLocator} from '@elastic/lsp-extension';
+import {shouldIncludeEntry} from '@elastic/typescript-language-server/lib/document-symbol';
 import { LspServer } from '@elastic/typescript-language-server/lib/lsp-server';
 import {
   asRange,
@@ -28,9 +28,9 @@ import { DependencyManager } from './dependency-manager';
 const NODE_MODULES: string = path.sep + 'node_modules' + path.sep;
 const EMPTY_FULL: Full = {symbols: [], references: []};
 
-const TYPESCRIPT_DIR_URI = pathToFileURL(path.resolve(__dirname, '..', 'node_modules', 'typescript') + '/');
+const TYPESCRIPT_DIR_URI = pathToFileURL(path.resolve(require.resolve('typescript'), '..', '..', 'package.json') + '/');
 const TYPESCRIPT_VERSION = JSON.parse(
-  fs.readFileSync(path.resolve(__dirname, '..', 'node_modules', 'typescript', 'package.json'), 'utf-8'),
+  fs.readFileSync(path.resolve(require.resolve('typescript'), '..', '..', 'package.json'), 'utf-8'),
 ).version;
 
 export class ExtendedLspServer extends LspServer {
@@ -152,15 +152,34 @@ export class ExtendedLspServer extends LspServer {
     //     return symbols;
     // }
     const symbols: lsp.SymbolInformation[] = [];
-    // return EMPTY_FULL;
-    // for (const item of tree.childItems) {
-    //   collectSymbolInformations(params.textDocument.uri, item, symbols);
-    // }
+
+    for (const item of tree.childItems) {
+      collectSymbolInformations(params.textDocument.uri, item, symbols);
+    }
     // this.didCloseTextDocument({ textDocument: { uri: params.textDocument.uri }});
 
-    const detailSymbols = await Promise.all(symbols.map(this.toDetailSymbolInformation));
+    const filterSymbols = symbols.filter((s) => !s.name.endsWith(' callback'));
 
-    return {symbols: detailSymbols, references: []};
+    const url = new URL(params.textDocument.uri);
+    let packageLocator = {};
+
+    try {
+      const [, packageJson] = await findClosestPackageJson(url, pathToFileURL(this.rootPath())); // enough param?
+
+      const [repoUri] = getRepoUri(packageJson);
+      packageLocator = {
+        name: packageJson.name,
+        repoUri,
+        version: '',     // TODO add version
+      };
+    } catch (e) {
+      this.logger.info('No package info found for' + url.href);
+    }
+
+    const detailSymbols = await filterSymbols.map(
+      (s) => this.toDetailSymbolInformation(s, packageLocator));
+
+    return { symbols: detailSymbols, references: [] };
   }
 
   didOpenTextDocument(params: lsp.DidOpenTextDocumentParams): void {
@@ -186,20 +205,15 @@ export class ExtendedLspServer extends LspServer {
   //   return name.split('"').join('').split('\\').join('.').split('/').join('.');
   // }
 
-  private async toDetailSymbolInformation(symbol: lsp.SymbolInformation): Promise<DetailSymbolInformation> {
-    // TODO
-    const url = new URL(symbol.location.uri);
-    const [, packageJson] = await findClosestPackageJson(url, pathToFileURL(this.rootPath())); // enough param?
+  protected findTsserverPath(): string {
+    return path.resolve(require.resolve('typescript'), '..', 'tsserver.js');
+  }
 
-    const [repoUri] = getRepoUri(packageJson);
-    const packageLocator = {
-      name: packageJson.name,
-      repoUri,
-      version: '',
-    };
+  private toDetailSymbolInformation(symbol: lsp.SymbolInformation, packageLocator: PackageLocator)
+    : DetailSymbolInformation {
     return {
       symbolInformation: symbol,
-      qname:  getQnameBySymbolInformation(symbol),
+      qname: getQnameBySymbolInformation(symbol),
       package: packageLocator,
     };
   }
