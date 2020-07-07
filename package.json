@@ -19,7 +19,7 @@
     "@elastic/typescript-language-server": "^0.3.8-alpha7",
     "child-process-promise": "^2.2.1",
     "mz": "^2.7.0",
-    "npm-registry-fetch": "^3.8.0",
+    "npm-registry-fetch": "^4.0.5",
     "semver": "^5.6.0",
     "source-map": "^0.7.3",
     "typescript": "^3.5.2",
